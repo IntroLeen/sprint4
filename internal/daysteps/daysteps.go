@@ -3,9 +3,12 @@ package daysteps
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Yandex-Practicum/tracker/internal/spentcalories"
 )
 
 const (
@@ -17,33 +20,61 @@ const (
 
 func parsePackage(data string) (int, time.Duration, error) {
 	// проверяем длину слайса
+
 	parts := strings.Split(data, ",")
 	if len(parts) != 2 {
-		return 0, 0, errors.New("неверный формат данных: ожидается 2 элемента")
+		err := errors.New("неверный формат данных: ожидается 2 элемента")
+		log.Println(err)
+		return 0, 0, err
+	}
+	//тут я уже отчаялся
+	if strings.HasPrefix(data, " ") || strings.HasSuffix(data, " ") {
+		err := errors.New("данные содержат пробелы в начале или конце")
+		log.Println(err)
+		return 0, 0, err
+	}
+	stepsStr := strings.TrimSpace(parts[0])
+	if parts[0] != stepsStr { // Проверка на наличие пробелов в начале или конце шага
+		err := errors.New("количество шагов содержит лишние пробелы")
+		log.Println(err)
+		return 0, 0, err
 	}
 	// преобразуем кол-во шагов и проверяем на ошибку
 	steps, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 	if err != nil {
-		return 0, 0, errors.New("не удалось преобразовать кол-во шагов в число")
+		err = errors.New("не удалось преобразовать кол-во шагов в число: " + err.Error())
+		log.Println(err)
+		return 0, 0, err
 	}
+
 	// проверка шагов
 	if steps <= 0 {
-		return 0, 0, errors.New("количество шагов 0")
+		err := errors.New("количество шагов должно быть больше 0")
+		log.Println(err)
+		return 0, 0, err
 	}
+
 	// преобразуем время и проверяем на ошибку
 	duration, err := time.ParseDuration(strings.TrimSpace(parts[1]))
 	if err != nil {
-		return 0, 0, errors.New("не удалось преобразовать время")
+		err = errors.New("не удалось преобразовать время: " + err.Error())
+		log.Println(err)
+		return 0, 0, err
+	}
+	if duration <= 0 {
+		err := errors.New("количество шагов должно быть больше 0")
+		log.Println(err)
+		return 0, 0, err
 	}
 
 	return steps, duration, nil
 }
 
 func DayActionInfo(data string, weight, height float64) string {
-	steps, _, err := parsePackage(data)
+	steps, duration, err := parsePackage(data)
 	//проверки
 	if err != nil {
-		fmt.Println("Ошибка:", err)
+		log.Println("Ошибка при парсинге данных:", err)
 		return ""
 	}
 	if steps <= 0 {
@@ -52,8 +83,13 @@ func DayActionInfo(data string, weight, height float64) string {
 	// применяем формулы
 	distanceInMeters := float64(steps) * stepLength
 	distanceInKm := distanceInMeters / mInKm
-	calories := WalkingSpentCalories(steps, weight)
-	result := fmt.Sprintf("Количество шагов: %d.\nДистанция составила %.2f км.\nВы сожгли %.2f ккал.", steps, distanceInKm, calories)
+	calories, calErr := spentcalories.WalkingSpentCalories(steps, weight, height, duration)
+	if calErr != nil {
+		log.Println("Ошибка при расчете калорий:", calErr)
+		return ""
+	}
+
+	result := fmt.Sprintf("Количество шагов: %d.\nДистанция составила %.2f км.\nВы сожгли %.2f ккал.\n", steps, distanceInKm, calories)
 
 	return result
 }
